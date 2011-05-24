@@ -1,12 +1,18 @@
 /*
-    Miller-Rabin Test Kernal
+ *  Miller-Rabin Test Kernal
+ *  Darrin Weng
 */
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <curand_kernel.h>
 
 #include "Miller_Rabin_Test.h"
+
+#define GRID_SIZE 1
+#define BLOCK_SIZE 512
+#define THREADS_PER_NUM 32
 
 __device__ uint32_t modular_exponent_32(uint32_t base, uint32_t power, uint32_t modulus) 
 {
@@ -25,21 +31,23 @@ __device__ uint32_t modular_exponent_32(uint32_t base, uint32_t power, uint32_t 
 
 __global__ void setup_kernel ( curandState *state )
 {
-    int id = threadIdx . x + blockIdx .x * 64;
+    int id = threadIdx.x + blockIdx.x * BLOCK_SIZE;
     /* Each thread gets same seed , a different sequence number  -
     ,
     no offset */
-    curand_init (1234 , id , 0 , & state [ id ]) ;
+    curand_init (1234, id, 0, &state[id]) ;
 }
 
 
 __global__ void Miller_Rabin_Kernal(Test_Result *results, curandState *state)
 {
-    int index = threadIdx.x % 32;
+    int index = (threadIdx.x % THREADS_PER_NUM) + blockIdx.x * BLOCK_SIZE;
     int test_num = results[index].num;
 
     //mod random number so that a < n
-    uint32_t a = curand(state) % test_num;
+    results[index].num = curand(&state[index]); // % test_num; //debug
+    
+    /*
     //do test
     uint32_t a_to_power, s, d, i;
 
@@ -70,16 +78,58 @@ __global__ void Miller_Rabin_Kernal(Test_Result *results, curandState *state)
         return;
 
     results[index].passed++;
+    */
 }
 
 int main()
 {
     curandState *dev_rand_state;
+    Test_Result *results, *dev_results;
+    uint32_t *dev_test_numbers;
+    uint32_t test_numbers[BLOCK_SIZE]; //debug size right now 
     
-    //Allocate mem for RNG states
-    cudaMalloc((void **) &dev_rand_state, sizeof(curandState) * 512);
+    //Generate or get from a file the test numbers
+    for(int i = 0; i < 512; i++)
+    {
+        test_numbers[i] = i + 1000;
+    }
     
-    //Init RNG states
-    setup_kernel<<<1, 512>>>(dev_rand_state);
+    //Allocate mem for RNG states, numbers to be tested, and results
+    cudaMalloc((void **) &dev_rand_state, sizeof(curandState) * BLOCK_SIZE * GRID_SIZE);
+    cudaMalloc((void **) &dev_results, sizeof(Test_Result) * BLOCK_SIZE * GRID_SIZE);
+    cudaMalloc((void **) &dev_test_numbers, sizeof(uint32_t) * BLOCK_SIZE * GRID_SIZE);
+    
+    results = (Test_Result *) malloc(sizeof(Test_Result) * BLOCK_SIZE * GRID_SIZE);
+    
+    //Init RNG states and transfer data to GPU
+    setup_kernel<<<GRID_SIZE, BLOCK_SIZE>>>(dev_rand_state);
+    
+    cudaMemcpy(dev_test_numbers, test_numbers, sizeof(uint32_t) * BLOCK_SIZE * GRID_SIZE, 
+            cudaMemcpyHostToDevice);
+    
+    //Run Tests
+    Miller_Rabin_Kernal<<<GRID_SIZE, BLOCK_SIZE>>>(dev_results, dev_rand_state);
+    
+    //Transfer results back to cpu
+    cudaMemcpy(results, dev_results, sizeof(Test_Result) * BLOCK_SIZE * GRID_SIZE, 
+            cudaMemcpyHostToDevice);
+            
+    //Clean up memory
+    cudaFree(dev_results);
+    cudaFree(dev_rand_state);
+    cudaFree(dev_test_numbers);
+    
+    //Print results
+    for(int i = 0; i < BLOCK_SIZE * GRID_SIZE; i++)
+    {
+        printf("%d is ", results[i].num);
+        
+        if(results[i].passed == PASSED)
+            printf("PRIME\n");
+        else
+            printf("COMPOSITE\n");
+    }
+    
+    free(results);
 }
 
