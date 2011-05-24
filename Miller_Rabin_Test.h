@@ -4,7 +4,7 @@
 #define PASSED 0
 
 typedef struct {
-    int num;
+    uint32_t num;
     int passed;
 } Test_Result;
 

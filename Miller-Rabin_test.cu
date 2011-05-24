@@ -29,24 +29,24 @@ __device__ uint32_t modular_exponent_32(uint32_t base, uint32_t power, uint32_t 
     return (uint32_t)result; /* Will not truncate since modulus is a uint32_t */
 }
 
-__global__ void setup_kernel ( curandState *state )
+__global__ void setup_kernel ( curandState *state , int seed)
 {
     int id = threadIdx.x + blockIdx.x * BLOCK_SIZE;
     /* Each thread gets same seed , a different sequence number  -
     ,
     no offset */
-    curand_init (1234, id, 0, &state[id]) ;
+    curand_init (seed, id, 0, &state[id]) ;
 }
 
 
 __global__ void Miller_Rabin_Kernal(Test_Result *results, curandState *state)
 {
-    int index = (threadIdx.x % THREADS_PER_NUM) + blockIdx.x * BLOCK_SIZE;
-    int test_num = results[index].num;
+    //int index = (threadIdx.x % THREADS_PER_NUM) + blockIdx.x * BLOCK_SIZE;
+    //int test_num = results[index].num;
 
     //mod random number so that a < n
-    results[index].num = curand(&state[index]); // % test_num; //debug
-    
+    results[threadIdx.x].num = curand(&state[threadIdx.x]) % 10000; // % test_num; //debug
+    results[threadIdx.x].passed = 0;
     /*
     //do test
     uint32_t a_to_power, s, d, i;
@@ -89,10 +89,11 @@ int main()
     uint32_t test_numbers[BLOCK_SIZE]; //debug size right now 
     
     //Generate or get from a file the test numbers
-    for(int i = 0; i < 512; i++)
+    for(int i = 0; i < BLOCK_SIZE; i++)
     {
         test_numbers[i] = i + 1000;
     }
+    
     
     //Allocate mem for RNG states, numbers to be tested, and results
     cudaMalloc((void **) &dev_rand_state, sizeof(curandState) * BLOCK_SIZE * GRID_SIZE);
@@ -101,18 +102,27 @@ int main()
     
     results = (Test_Result *) malloc(sizeof(Test_Result) * BLOCK_SIZE * GRID_SIZE);
     
+    //set up grid and blocksize
+    dim3 dimBlock(BLOCK_SIZE, 1);
+    dim3 dimGrid(GRID_SIZE, 1);
+    
+    //seed RND with cpu rand
+    srand((unsigned) time(NULL));
+    int seed = rand();
+    printf("Seed is %d\n", seed);
+    
     //Init RNG states and transfer data to GPU
-    setup_kernel<<<GRID_SIZE, BLOCK_SIZE>>>(dev_rand_state);
+    setup_kernel<<<dimGrid, dimBlock>>>(dev_rand_state, seed);
     
     cudaMemcpy(dev_test_numbers, test_numbers, sizeof(uint32_t) * BLOCK_SIZE * GRID_SIZE, 
             cudaMemcpyHostToDevice);
     
     //Run Tests
-    Miller_Rabin_Kernal<<<GRID_SIZE, BLOCK_SIZE>>>(dev_results, dev_rand_state);
+    Miller_Rabin_Kernal<<<dimGrid, dimBlock>>>(dev_results, dev_rand_state);
     
     //Transfer results back to cpu
     cudaMemcpy(results, dev_results, sizeof(Test_Result) * BLOCK_SIZE * GRID_SIZE, 
-            cudaMemcpyHostToDevice);
+            cudaMemcpyDeviceToHost);
             
     //Clean up memory
     cudaFree(dev_results);
@@ -122,7 +132,7 @@ int main()
     //Print results
     for(int i = 0; i < BLOCK_SIZE * GRID_SIZE; i++)
     {
-        printf("%d is ", results[i].num);
+        printf("%u is ", results[i].num);
         
         if(results[i].passed == PASSED)
             printf("PRIME\n");
