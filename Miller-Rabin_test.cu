@@ -14,19 +14,16 @@
 #define BLOCK_SIZE 512
 #define THREADS_PER_NUM 32
 
-#define CUDA_CALL(x) if(x != cudaSuccess)\
-printf("CUDA error %s\n", cudaGetErrorString(cudaGetLastError()))
-
 __device__ uint32_t modular_exponent_32(uint32_t base, uint32_t power, uint32_t modulus) 
 {
     uint64_t result = 1;
     int i; 
     for (i = 32; i > 0; i--) 
     {
-        result = (result*result) % modulus;
+        result = (result * result) % modulus;
         if (power & (1 << i)) 
         {
-            result = (result*base) % modulus;
+            result = (result * base) % modulus;
         }
     }
     return (uint32_t)result; /* Will not truncate since modulus is a uint32_t */
@@ -35,9 +32,7 @@ __device__ uint32_t modular_exponent_32(uint32_t base, uint32_t power, uint32_t 
 __global__ void setup_kernel ( curandState *state , int seed)
 {
     int id = threadIdx.x + blockIdx.x * BLOCK_SIZE;
-    /* Each thread gets same seed , a different sequence number  -
-    ,
-    no offset */
+
     curand_init (seed, id, 0, &state[id]) ;
 }
 
@@ -45,14 +40,10 @@ __global__ void setup_kernel ( curandState *state , int seed)
 __global__ void Miller_Rabin_Kernal(Test_Result *results, curandState *state)
 {
     int index = (threadIdx.x / THREADS_PER_NUM) + blockIdx.x * BLOCK_SIZE;
-    printf("Thread #%d index is %d\n", threadIdx.x, index); 
     int test_num = results[index].num;
 
     //mod random number so that a < n
     uint32_t a = curand(&state[threadIdx.x]) % test_num;
-
-    results[index].passed = 1;
-    return;
 
     //do test
     uint32_t a_to_power, s, d, i;
@@ -71,15 +62,18 @@ __global__ void Miller_Rabin_Kernal(Test_Result *results, curandState *state)
 
     if (a_to_power == 1)
     {
-        printf("Thread #%d Return 1\n", threadIdx.x);   
+        printf("Thread #%d %d Return 1\n", threadIdx.x, test_num);   
         return;
     }
+    
+    if(s == 0) //Figure out what should be returned here
+        return;
 
     for(i = 0; i < s - 1; i++) 
     {
         if (a_to_power == test_num - 1)
         {
-            printf("Thread #%d Return 2\n", threadIdx.x);   
+            printf("Thread #%d %d Return 2\n", threadIdx.x, test_num);   
             return;
         }
 
@@ -88,7 +82,7 @@ __global__ void Miller_Rabin_Kernal(Test_Result *results, curandState *state)
 
     if (a_to_power == test_num - 1)
     {
-        printf("Thread #%d Return 3\n", threadIdx.x);   
+        printf("Thread #%d %d Return 3\n", threadIdx.x, test_num);
         return;
     }
 
@@ -102,13 +96,12 @@ int main()
     Test_Result *results, *dev_results;
     int num_results = (BLOCK_SIZE / THREADS_PER_NUM) * GRID_SIZE;
 
-    //results = (Test_Result *) malloc(sizeof(Test_Result) * num_results));
     results = (Test_Result *) malloc(sizeof(Test_Result) * num_results);
 
     //Generate or get from a file the test numbers
     for(int i = 0; i < num_results; i++)
     {
-        results[i].num = i + 1000;
+        results[i].num = i + 21214;
         results[i].passed = 0;
     }
 
@@ -121,7 +114,7 @@ int main()
     dim3 dimGrid(GRID_SIZE, 1);
     
     //seed RND with cpu rand
-    srand((unsigned) time(NULL));
+    srand(52);
     int seed = rand();
     
     //Init RNG states and transfer data to GPU

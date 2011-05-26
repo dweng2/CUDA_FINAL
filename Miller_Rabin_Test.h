@@ -5,7 +5,7 @@
 
 typedef struct {
     uint32_t num;
-    int passed;
+    uint32_t passed;
 } Test_Result;
 
 #endif
