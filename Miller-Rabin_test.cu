@@ -10,7 +10,7 @@
 
 #include "Miller_Rabin_Test.h"
 
-#define GRID_SIZE 1
+#define GRID_SIZE 4
 #define BLOCK_SIZE 512
 #define THREADS_PER_NUM 32
 
@@ -39,7 +39,7 @@ __global__ void setup_kernel ( curandState *state , int seed)
 
 __global__ void Miller_Rabin_Kernal(Test_Result *results, curandState *state)
 {
-    int index = (threadIdx.x / THREADS_PER_NUM) + blockIdx.x * BLOCK_SIZE;
+    int index = (threadIdx.x / THREADS_PER_NUM) + blockIdx.x * (BLOCK_SIZE / THREADS_PER_NUM);
     int test_num = results[index].num;
 
     //mod random number so that a < n
@@ -54,26 +54,29 @@ __global__ void Miller_Rabin_Kernal(Test_Result *results, curandState *state)
 
     while ((d % 2) == 0) 
     {
-        d /= 2;
+        d >>= 1;
         s++;
+    }
+    
+    if(s == 0) //Even number so cannot be prime
+    {
+        results[index].passed = 1;
+        return;
     }
 
     a_to_power = modular_exponent_32(a, d, test_num);
 
     if (a_to_power == 1)
     {
-        printf("Thread #%d %d Return 1\n", threadIdx.x, test_num);   
+        printf("Thread #%d %d Return 1\n", threadIdx.x, test_num);
         return;
     }
-    
-    if(s == 0) //Figure out what should be returned here
-        return;
 
     for(i = 0; i < s - 1; i++) 
     {
         if (a_to_power == test_num - 1)
         {
-            printf("Thread #%d %d Return 2\n", threadIdx.x, test_num);   
+            printf("Thread #%d %d Return 2\n", threadIdx.x, test_num);
             return;
         }
 
@@ -85,8 +88,8 @@ __global__ void Miller_Rabin_Kernal(Test_Result *results, curandState *state)
         printf("Thread #%d %d Return 3\n", threadIdx.x, test_num);
         return;
     }
-
-    printf("Thread #%d %u Not prime\n", threadIdx.x, test_num);
+    
+    printf("Thread #%d %d a pow %u Return NOT\n", threadIdx.x, test_num, a_to_power);
     results[index].passed = 1;
 }
 
@@ -98,10 +101,10 @@ int main()
 
     results = (Test_Result *) malloc(sizeof(Test_Result) * num_results);
 
-    //Generate or get from a file the test numbers
+    //Generate or get from a file the test numbers NOTE dont test even numbers or 2,5,7
     for(int i = 0; i < num_results; i++)
     {
-        results[i].num = i + 21214;
+        results[i].num = i + 719;
         results[i].passed = 0;
     }
 
@@ -135,13 +138,12 @@ int main()
     //Print results
     for(int i = 0; i < num_results; i++)
     {
-        printf("%u is %d\n", results[i].num, results[i].passed);
+        printf("%u is ", results[i].num);
         
-        /*if(results[i].passed == PASSED)
+        if(results[i].passed == PASSED)
             printf("PRIME\n");
         else
             printf("COMPOSITE\n");
-        */
     }
     
     free(results);
