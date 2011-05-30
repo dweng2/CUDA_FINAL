@@ -10,7 +10,7 @@
 
 #include "Miller_Rabin_Test.h"
 
-#define GRID_SIZE 4
+#define GRID_SIZE 2000 //DONT MAKE TOO BIG WILL KILL MACHINES
 #define BLOCK_SIZE 512
 #define THREADS_PER_NUM 32
 
@@ -71,7 +71,7 @@ __global__ void Miller_Rabin_Kernal(Test_Result *results, curandState *state)
     
     if (a_to_power == 1)
     {
-        printf("Thread #%d %d Return 1\n", threadIdx.x, test_num);
+        //printf("Thread #%d %d Return 1\n", threadIdx.x, test_num);
         return;
     }
 
@@ -79,7 +79,7 @@ __global__ void Miller_Rabin_Kernal(Test_Result *results, curandState *state)
     {
         if (a_to_power == test_num - 1)
         {
-            printf("Thread #%d %d Return 2\n", threadIdx.x, test_num);
+            //printf("Thread #%d %d Return 2\n", threadIdx.x, test_num);
             return;
         }
 
@@ -88,11 +88,11 @@ __global__ void Miller_Rabin_Kernal(Test_Result *results, curandState *state)
 
     if (a_to_power == test_num - 1)
     {
-        printf("Thread #%d %d Return 3\n", threadIdx.x, test_num);
+        //printf("Thread #%d %d Return 3\n", threadIdx.x, test_num);
         return;
     }
     
-    printf("Thread #%d %d Return NOT\n", threadIdx.x, test_num);
+    //printf("Thread #%d %d Return NOT\n", threadIdx.x, test_num);
     results[index].passed = 1;
 }
 
@@ -139,6 +139,7 @@ int main()
     cudaFree(dev_rand_state);
     
     //Print results
+    printf("Tested %d numbers\n", num_results);
     for(int i = 0; i < num_results; i++)
     {
         printf("%u is ", results[i].num);
