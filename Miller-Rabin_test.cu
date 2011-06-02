@@ -10,7 +10,7 @@
 
 #include "Miller_Rabin_Test.h"
 
-#define GRID_SIZE 2000 //DONT MAKE TOO BIG WILL KILL MACHINES
+#define GRID_SIZE 100 //DONT MAKE TOO BIG WILL KILL MACHINES
 #define BLOCK_SIZE 512
 #define THREADS_PER_NUM 32
 
@@ -46,7 +46,9 @@ __global__ void Miller_Rabin_Kernal(Test_Result *results, curandState *state)
     int test_num = results[index].num;
 
     //mod random number so that a < n
-    uint32_t a = curand(&state[threadIdx.x]) % test_num;
+    uint32_t a = 0;
+    while(a < 1 || a > test_num - 1)
+        a = curand(&state[threadIdx.x]) % test_num;
 
     //do test
     uint32_t a_to_power, s, d, i;
@@ -107,7 +109,7 @@ int main()
     //Generate or get from a file the test numbers NOTE dont test even numbers or 2,5,7
     for(int i = 0; i < num_results; i++)
     {
-        results[i].num = i + 719;
+        results[i].num = i + 2;
         results[i].passed = 0;
     }
 
@@ -141,13 +143,10 @@ int main()
     //Print results
     printf("Tested %d numbers\n", num_results);
     for(int i = 0; i < num_results; i++)
-    {
-        printf("%u is ", results[i].num);
-        
+    {        
         if(results[i].passed == PASSED)
-            printf("PRIME\n");
-        else
-            printf("COMPOSITE\n");
+            printf("%d\n", results[i].num);
+      
     }
     
     free(results);
